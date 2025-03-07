@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>INOXX AI-ASSISTED IDE</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.js"></script>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #00ff00;
+            --terminal-green: #39ff14;
+            --accent-color: #2a5298;
+            --border-color: #39ff14;
+            --tab-bg: #2d2d2d;
+            --hover-color: #3d3d3d;
+            --nav-width: 250px;
+            --nav-collapsed-width: 60px;
+        }
+
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: 'Courier New', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .navbar {
+            background: linear-gradient(90deg, #1e1e1e 0%, #2d2d2d 100%);
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--terminal-green);
+            box-shadow: 0 2px 10px rgba(57, 255, 20, 0.1);
+        }
+
+        .navbar h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-align: center;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(57, 255, 20, 0.5);
+        }
+
+        .navbar span {
+            color: var(--terminal-green);
+            font-weight: 700;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            position: relative;
+        }
+
+        .side-nav {
+            width: var(--nav-width);
+            background: var(--tab-bg);
+            border-right: 1px solid var(--terminal-green);
+            transition: width 0.3s ease;
+            overflow: hidden;
+        }
+
+        .side-nav.collapsed {
+            width: var(--nav-collapsed-width);
+        }
+
+        .nav-toggle {
+            position: absolute;
+            right: -20px;
+            top: 20px;
+            background: var(--terminal-green);
+            border: none;
+            color: var(--bg-color);
+            width: 20px;
+            height: 40px;
+            cursor: pointer;
+            z-index: 100;
+        }
+
+        .tabs {
+            display: flex;
+            flex-direction: column;
+            padding: 1rem 0;
+        }
+
+        .tab {
+            padding: 1rem 2rem;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            color: var(--text-color);
+            text-align: left;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tab:hover {
+            background: var(--hover-color);
+            color: var(--terminal-green);
+            text-shadow: 0 0 5px var(--terminal-green);
+        }
+
+        .tab.active {
+            color: var(--terminal-green);
+            border-left-color: var(--terminal-green);
+            text-shadow: 0 0 5px var(--terminal-green);
+        }
+
+        .content-area {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .container {
+            flex: 1;
+            padding: 0;
+            background: var(--bg-color);
+        }
+
+        .editor-container {
+            height: 400px;
+            border: 1px solid var(--terminal-green);
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            box-shadow: 0 0 10px rgba(57, 255, 20, 0.2);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .button {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--terminal-green);
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            background: transparent;
+            color: var(--terminal-green);
+            transition: all 0.3s ease;
+        }
+
+        .button:hover {
+            background: var(--terminal-green);
+            color: var(--bg-color);
+            text-shadow: none;
+            box-shadow: 0 0 10px var(--terminal-green);
+        }
+
+        .output-panel {
+            background: var(--tab-bg);
+            border: 1px solid var(--terminal-green);
+            border-radius: 4px;
+            padding: 1rem;
+            height: 200px;
+            overflow: auto;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            color: var(--text-color);
+        }
+
+        .feature-description {
+            color: var(--text-color);
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            opacity: 0.8;
+        }
+
+        #prompt-input {
+            background: var(--tab-bg);
+            border: 1px solid var(--terminal-green);
+            border-radius: 4px;
+            color: var(--text-color);
+            font-family: 'Courier New', monospace;
+            padding: 1rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--terminal-green);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-color);
+        }
+
+        /* Terminal-like blinking cursor */
+        .navbar h1::after {
+            content: '_';
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .tabs {
+                flex-wrap: wrap;
+            }
+
+            .tab {
+                flex: 1 1 auto;
+                text-align: center;
+                padding: 0.75rem;
+            }
+
+            .button-group {
+                flex-wrap: wrap;
+            }
+
+            .button {
+                flex: 1 1 auto;
+            }
+        }
+
+        .debug-controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background: var(--tab-bg);
+            border: 1px solid var(--terminal-green);
+            border-radius: 4px;
+        }
+
+        .debug-panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .debug-panel {
+            background: var(--tab-bg);
+            border: 1px solid var(--terminal-green);
+            border-radius: 4px;
+            padding: 1rem;
+        }
+
+        .debug-panel h3 {
+            margin: 0 0 0.5rem 0;
+            color: var(--terminal-green);
+            font-size: 1rem;
+        }
+
+        .breakpoint-gutter {
+            width: 1rem;
+            cursor: pointer;
+        }
+
+        .breakpoint-marker {
+            color: var(--terminal-green);
+            font-size: 1.2rem;
+        }
+        .documentation-container {
+            background: var(--tab-bg);
+            border: 1px solid var(--terminal-green);
+            border-radius: 4px;
+            padding: 2rem;
+            margin-top: 1rem;
+        }
+
+        .doc-preview {
+            color: var(--text-color);
+        }
+
+        .doc-preview h3 {
+            color: var(--terminal-green);
+            margin-top: 0;
+            margin-bottom: 1rem;
+        }
+
+        .download-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            margin-top: 1.5rem;
+        }
+
+        .download-icon {
+            font-size: 1.2em;
+        }
+
+        /* Hover effect for download button */
+        .download-button:hover {
+            background: var(--terminal-green);
+            color: var(--bg-color);
+            text-decoration: none;
+        }
+
+        /* Debug line highlighting */
+        .debug-line-highlight {
+            background: rgba(57, 255, 20, 0.2);
+            border: 1px solid var(--terminal-green);
+        }
+        .debug-line-gutter {
+            background: var(--terminal-green);
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1><span>INOXX</span> AI-ASSISTED IDE</h1>
+    </nav>
+
+    <div class="main-container">
+        <div class="side-nav">
+            <button class="nav-toggle" onclick="toggleNav()">◀</button>
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('ide')">DevHub</button>
+                <button class="tab" onclick="switchTab('generator')">AI Smart Code</button>
+                <button class="tab" onclick="switchTab('blockchain')">DeFi Dev</button>
+                <button class="tab" onclick="switchTab('documentation')">Documentation</button>
+            </div>
+        </div>
+
+        <div class="content-area">
+            <div id="ide" class="tab-content active">
+                <p class="feature-description">Write and analyze Python code with AI assistance</p>
+                <div class="debug-controls">
+                    <button class="button" onclick="startDebugging()">Start Debugging</button>
+                    <button class="button" onclick="stopDebugging()">Stop</button>
+                    <button class="button" onclick="stepOver()">Step Over</button>
+                    <button class="button" onclick="stepInto()">Step Into</button>
+                    <button class="button" onclick="continueExecution()">Continue</button>
+                </div>
+                <div class="editor-container" id="main-editor"></div>
+                <div class="debug-panels">
+                    <div class="debug-panel">
+                        <h3>Variables</h3>
+                        <pre id="variables-panel" class="output-panel"></pre>
+                    </div>
+                    <div class="debug-panel">
+                        <h3>Call Stack</h3>
+                        <pre id="call-stack-panel" class="output-panel"></pre>
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button class="button" onclick="analyzeCode()">Analyze Code</button>
+                    <button class="button" onclick="generateDocs()">Generate Documentation</button>
+                    <button class="button" onclick="getCompletions()">Get Completions</button>
+                </div>
+                <pre class="output-panel" id="output">Analysis output will appear here...</pre>
+            </div>
+
+            <div id="generator" class="tab-content">
+                <p class="feature-description">Describe what you want to create in plain English, and get working Python code</p>
+                <textarea 
+                    class="output-panel" 
+                    id="prompt-input" 
+                    style="height: 100px; margin-bottom: 1rem;"
+                    placeholder="Describe what you want the code to do...
+Example: Create a function that calculates the fibonacci sequence"></textarea>
+                <button class="button" style="width: 100%;" onclick="generateCode()">Generate Python Code</button>
+                <div style="margin-top: 1rem;">
+                    <div class="editor-container" id="preview-editor"></div>
+                    <button class="button" onclick="copyToMainEditor()">Copy to Main Editor</button>
+                </div>
+                <pre id="generated-code" class="output-panel">Generated code will appear here...</pre>
+            </div>
+
+            <div id="blockchain" class="tab-content">
+                <p class="feature-description">Develop, test, and deploy smart contracts</p>
+                <div class="editor-container" id="contract-editor"></div>
+                <div class="button-group">
+                    <button class="button" onclick="compileContract()">Compile</button>
+                    <button class="button" onclick="verifyContract()">Verify</button>
+                    <button class="button" onclick="estimateGas()">Estimate Gas</button>
+                    <button class="button" onclick="deployContract()">Deploy</button>
+                </div>
+                <pre class="output-panel" id="blockchain-output">Contract output will appear here...</pre>
+            </div>
+
+            <div id="documentation" class="tab-content">
+                <p class="feature-description">Access comprehensive documentation of all features and components</p>
+                <div class="documentation-container">
+                    <div class="doc-preview">
+                        <h3>Inoxx IDE Documentation</h3>
+                        <p>Complete guide covering all features, code examples, and architectural diagrams.</p>
+                        <div class="button-group">
+                            <a href="/docs/output/inoxx_documentation.pdf" download class="button download-button">
+                                <span class="download-icon">⬇</span> Download PDF Documentation
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let editor, previewEditor, contractEditor;
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            monaco.editor.defineTheme('terminal-theme', {
+                base: 'vs-dark',
+                inherit: true,
+                rules: [
+                    { token: 'comment', foreground: '39ff14', fontStyle: 'italic' },
+                    { token: 'keyword', foreground: '39ff14', fontStyle: 'bold' },
+                    { token: 'string', foreground: '39ff14' }
+                ],
+                colors: {
+                    'editor.background': '#1e1e1e',
+                    'editor.foreground': '#39ff14',
+                    'editor.lineHighlightBackground': '#2d2d2d',
+                    'editorCursor.foreground': '#39ff14',
+                    'editor.selectionBackground': '#39ff1440'
+                }
+            });
+
+            editor = monaco.editor.create(document.getElementById('main-editor'), {
+                value: '# Write your Python code here\n\n',
+                language: 'python',
+                theme: 'terminal-theme',
+                automaticLayout: true
+            });
+
+            previewEditor = monaco.editor.create(document.getElementById('preview-editor'), {
+                value: '# Generated code will appear here...',
+                language: 'python',
+                theme: 'terminal-theme',
+                automaticLayout: true,
+                readOnly: true,
+                minimap: { enabled: false }
+            });
+
+            const defaultContract = `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract MyContract {
+    string public message;
+
+    constructor() {
+        message = "Hello, Blockchain!";
+    }
+
+    function setMessage(string memory newMessage) public {
+        message = newMessage;
+    }
+
+    function getMessage() public view returns (string memory) {
+        return message;
+    }
+}`;
+
+            contractEditor = monaco.editor.create(document.getElementById('contract-editor'), {
+                value: defaultContract,
+                language: 'sol',
+                theme: 'terminal-theme',
+                automaticLayout: true,
+                minimap: { enabled: false }
+            });
+
+            if (!monaco.languages.getLanguages().some(lang => lang.id === 'sol')) {
+                monaco.languages.register({ id: 'sol' });
+                monaco.languages.setMonarchTokensProvider('sol', {
+                    keywords: [
+                        'contract', 'pragma', 'solidity', 'public', 'private', 'internal',
+                        'external', 'pure', 'view', 'payable', 'memory', 'storage', 'calldata',
+                        'function', 'returns', 'return', 'constructor', 'event', 'emit',
+                        'uint', 'int', 'bool', 'string', 'address', 'mapping'
+                    ],
+                    tokenizer: {
+                        root: [
+                            [/[a-zA-Z_]\w*/, {
+                                cases: {
+                                    '@keywords': 'keyword',
+                                    '@default': 'variable'
+                                }
+                            }],
+                            [/\/\/.*$/, 'comment'],
+                            [/".*?"/, 'string'],
+                            [/\d+/, 'number']
+                        ]
+                    }
+                });
+            }
+        });
+
+        function getEditorContent() {
+            return editor ? editor.getValue() : '';
+        }
+
+        function getCursorPosition() {
+            if (!editor) return [1, 1];
+            const position = editor.getPosition();
+            return [position.lineNumber, position.column];
+        }
+
+        function displayOutput(data, elementId='output') {
+            const output = document.getElementById(elementId);
+            if (!output) return;
+
+            let displayText = '';
+            try {
+                if (data === null || data === undefined) {
+                    displayText = 'No data received';
+                } else if (typeof data === 'string') {
+                    displayText = data;
+                } else if (data.error) {
+                    displayText = `Error: ${data.error}`;
+                } else if (data.code) {
+                    if (previewEditor) {
+                        previewEditor.setValue(data.code);
+                    }
+                } else {
+                    displayText = JSON.stringify(data, null, 2);
+                }
+            } catch (e) {
+                displayText = `Error displaying output: ${e.message}`;
+            }
+            if (displayText) {
+                output.textContent = displayText;
+            }
+        }
+
+        function copyToMainEditor() {
+            if (editor && previewEditor) {
+                editor.setValue(previewEditor.getValue());
+                switchTab('ide');
+            }
+        }
+
+        function generateCode() {
+            const prompt = document.getElementById('prompt-input').value;
+            if (!prompt.trim()) {
+                displayOutput('Please enter a description of what you want to create.', 'generated-code');
+                return;
+            }
+
+            // Show loading state
+            const generateButton = document.querySelector('button[onclick="generateCode()"]');
+            const originalText = generateButton.textContent;
+            generateButton.textContent = 'Generating...';
+            generateButton.disabled = true;
+            displayOutput('Generating code... Please wait...', 'generated-code');
+
+            fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: prompt })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    if (data.code) {
+                        displayOutput(`Error: ${data.error}\n\nPartial code generated:\n${data.code}`, 'generated-code');
+                    } else {
+                        throw new Error(data.error);
+                    }
+                } else if (data.code) {
+                    displayOutput(data.code, 'generated-code');
+                    if (previewEditor) {
+                        previewEditor.setValue(data.code);
+                    }
+                } else {
+                    throw new Error('No code was generated');
+                }
+            })
+            .catch(error => displayOutput(`Error: ${error.message}`, 'generated-code'))
+            .finally(() => {
+                // Reset button state
+                generateButton.textContent = originalText;
+                generateButton.disabled = false;
+            });
+        }
+
+        function analyzeCode() {
+            fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    code: getEditorContent() 
+                })
+            })
+            .then(response => response.json())
+            .then(data => displayOutput(data))
+            .catch(error => displayOutput('Error: ' + error.message));
+        }
+
+        function generateDocs() {
+            fetch('/api/document', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    code: getEditorContent(),
+                    position: getCursorPosition()
+                })
+            })
+            .then(response => response.json())
+            .then(data => displayOutput(data))
+            .catch(error => displayOutput('Error: ' + error.message));
+        }
+
+        function getCompletions() {
+            fetch('/api/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    code: getEditorContent(),
+                    position: getCursorPosition()
+                })
+            })
+            .then(response => response.json())
+            .then(data => displayOutput(data))
+            .catch(error => displayOutput('Error: ' + error.message));
+        }
+
+        function compileContract() {
+            const code = contractEditor.getValue();
+            fetch('/api/blockchain/compile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    code: code,
+                    name: 'Contract'
+                })
+            })
+            .then(response => response.json())
+            .then(data => displayOutput(data, 'blockchain-output'))
+            .catch(error => displayOutput('Error: ' + error.message, 'blockchain-output'));
+        }
+
+        function verifyContract() {
+            const code = contractEditor.getValue();
+            fetch('/api/blockchain/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code })
+            })
+            .then(response => response.json())
+            .then(data => displayOutput(data, 'blockchain-output'))
+            .catch(error => displayOutput('Error: ' + error.message, 'blockchain-output'));
+        }
+
+        function estimateGas() {
+            const code = contractEditor.getValue();
+            fetch('/api/blockchain/compile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code })
+            })
+            .then(response => response.json())
+            .then(data => 
+                fetch('/api/blockchain/estimate-gas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contract: data.result })
+                })
+            )
+            .then(response => response.json())
+            .then(data => displayOutput(data, 'blockchain-output'))
+            .catch(error => displayOutput('Error: ' + error.message, 'blockchain-output'));
+        }
+
+        function deployContract() {
+            const code = contractEditor.getValue();
+            fetch('/api/blockchain/compile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    code: code,
+                    name: 'Contract'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                return fetch('/api/blockchain/deploy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        code: code,
+                        name: 'Contract',
+                        compiled: data.result
+                    })
+                });
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const deploymentInfo = `Contract deployed successfully!\n` +
+                        `Contract Address: ${data.contract_address}\n` +
+                        `Transaction Hash: ${data.transaction_hash}\n` +
+                        `Gas Used: ${data.gas_used}\n` +
+                        `Block Number: ${data.block_number}`;
+                    displayOutput(deploymentInfo, 'blockchain-output');
+                } else {
+                    throw new Error(data.error || 'Deployment failed');
+                }
+            })
+            .catch(error => displayOutput('Error: ' + error.message, 'blockchain-output'));
+        }
+
+
+        // Add after existing editor initialization
+        editor.onMouseDown((e) => {
+            if (e.target.type === 1) { // Margin area
+                const lineNumber = e.target.position.lineNumber;
+                toggleBreakpoint(lineNumber);
+            }
+        });
+
+        // Add new debugging functions
+        let isDebugging = false;
+        let debugInterval = null;
+
+        function startDebugging() {
+            const code = editor.getValue();
+            fetch('/api/debug/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) throw new Error(data.error);
+                isDebugging = true;
+                startDebugStatePolling();
+            })
+            .catch(error => displayOutput('Error: ' + error.message));
+        }
+
+        function stopDebugging() {
+            fetch('/api/debug/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) throw new Error(data.error);
+                isDebugging = false;
+                stopDebugStatePolling();
+            })
+            .catch(error => displayOutput('Error: ' + error.message));
+        }
+
+        function stepOver() {
+            sendDebugCommand('over');
+        }
+
+        function stepInto() {
+            sendDebugCommand('into');
+        }
+
+        function continueExecution() {
+            sendDebugCommand('continue');
+        }
+
+        function sendDebugCommand(type) {
+            fetch('/api/debug/step', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: type })
+            })
+            .then(response => response.json())
+            .catch(error => displayOutput('Error: ' + error.message));
+        }
+
+        function toggleBreakpoint(line) {
+            fetch('/api/debug/breakpoint', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    filename: 'current',
+                    line: line
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) throw new Error(data.error);
+                updateBreakpointDecorations(data);
+            })
+            .catch(error => displayOutput('Error: ' + error.message));
+        }
+
+        function startDebugStatePolling() {
+            stopDebugStatePolling();
+            debugInterval = setInterval(updateDebugState, 1000);
+        }
+
+        function stopDebugStatePolling() {
+            if (debugInterval) {
+                clearInterval(debugInterval);
+                debugInterval = null;
+            }
+        }
+
+        function updateDebugState() {
+            if (!isDebugging) return;
+
+            fetch('/api/debug/state')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    updateDebugUI(data);
+                })
+                .catch(error => console.error('Debug state error:', error));
+        }
+
+        function updateDebugUI(data) {
+            const state = data.state;
+            const output = data.output;
+
+            // Update variables panel with proper formatting
+            const variablesPanel = document.getElementById('variables-panel');
+            if (state.variables) {
+                let variablesContent = 'Local Variables:\n';
+                for (const [key, value] of Object.entries(state.variables.locals || {})) {
+                    variablesContent += `${key} = ${value}\n`;
+                }
+                variablesContent += '\nGlobal Variables:\n';
+                for (const [key, value] of Object.entries(state.variables.globals || {})) {
+                    variablesContent += `${key} = ${value}\n`;
+                }
+                variablesPanel.textContent = variablesContent;
+            }
+
+            // Update call stack panel with detailed information
+            const callStackPanel = document.getElementById('call-stack-panel');
+            if (state.call_stack) {
+                let stackContent = '';
+                state.call_stack.forEach((frame, index) => {
+                    stackContent += `Frame ${index}: ${frame.function} in ${frame.filename}:${frame.lineno}\n`;
+                    if (frame.locals) {
+                        stackContent += '  Local variables:\n';
+                        for (const [key, value] of Object.entries(frame.locals)) {
+                            stackContent += `    ${key} = ${value}\n`;
+                        }
+                    }
+                    stackContent += '\n';
+                });
+                callStackPanel.textContent = stackContent;
+            }
+
+            // Handle state updates and highlighting
+            if (output && output.type === 'state_update') {
+                // Clear previous line decorations
+                editor.deltaDecorations([], []);
+
+                // Highlight current line
+                const lineNumber = output.position.line;
+                editor.deltaDecorations([], [{
+                    range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+                    options: {
+                        isWholeLine: true,
+                        className: 'debug-line-highlight',
+                        glyphMarginClassName: 'debug-line-gutter'
+                    }
+                }]);
+
+                // Ensure the line is visible
+                editor.revealLine(lineNumber);
+            }
+
+            // Handle any errors
+            if (output && output.type === 'error') {
+                document.getElementById('output').textContent = 'Debug error: ' + output.message;
+            }
+        }
+
+        function updateBreakpointDecorations(data) {
+            const decorations = editor.getModel().getAllDecorations();
+            const lineNumber = data.line;
+
+            if (data.action === 'added') {
+                editor.createDecorationsCollection([{
+                    range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+                    options: {
+                        isWholeLine: true,
+                        className: 'breakpoint-marker',
+                        glyphMarginClassName: 'breakpoint-gutter'
+                    }
+                }]);
+            } else {
+                const decoration = decorations.find(d => 
+                    d.options.glyphMarginClassName === 'breakpoint-gutter' &&
+                    d.range.startLineNumber === lineNumber
+                );
+                if (decoration) {
+                    editor.removeDecorations([decoration.id]);
+                }
+            }
+        }
+
+        function toggleNav() {
+            const sideNav = document.querySelector('.side-nav');
+            const toggle = document.querySelector('.nav-toggle');
+            sideNav.classList.toggle('collapsed');
+            toggle.textContent = sideNav.classList.contains('collapsed') ? '▶' : '◀';
+        }
+    </script>
+</body>
+</html>
